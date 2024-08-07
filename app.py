@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import json
 
 
 class ykch_converter:
@@ -8,7 +9,7 @@ class ykch_converter:
     def __init__(self, url):
         self.target = url
 
-    def cocoforia(self):
+    def cocoforia(self, dict_order: bool = False):
         # サーバーからデータを取得
         target_url = self.target + '.js'
         # データをJsonで確保
@@ -23,10 +24,10 @@ class ykch_converter:
         status_data.append({'label': f'おもい', 'value': 0, 'max': 0})
         status_data.append({'label': f'ふしぎ', 'value': 0, 'max': 0})
         status_data.append({'label': f'ゆめ', 'value': 0, 'max': 0})
+        param.append({'label': 'しょうたい', 'value': res['shuzoku_name']})
         param.append({'label': 'へんげ', 'value': res['NC1']})
         param.append({'label': 'けもの', 'value': res['NC2']})
         param.append({'label': 'おとな', 'value': res['NC3']})
-        param.append({'label': 'こども', 'value': res['NC4']})
         param.append({'label': 'こども', 'value': res['NC4']})
 
         for i in res['tunagarid_dst']:
@@ -62,7 +63,10 @@ class ykch_converter:
                 'externalUrl': str(self.target), 'memo': memo, 'commands': command,
                 'status': status_data, 'params': param}
         out_data['data'] = temp
-        str_out = str(out_data).replace('\'', '"')
+        if dict_order:
+            str_out = out_data
+        else:
+            str_out = str(out_data).replace('\'', '"')
         return str_out
 
 
@@ -75,13 +79,42 @@ st.write('https://charasheet.vampire-blood.net/')
 # セッションのコンポーネントのアクセスを簡略化
 asset = st.session_state
 
-get_button = st.button(label='変換結果をコピー', key='-convert-')
+get_button = st.button(label='変換', key='-convert-')
+save_button = st.button(label='変換したデータをテキストで保存', key='-save_txt-')
 # イベント処理
+# 変換ボタン
 if get_button and len(asset['-input-']) > 0:
     target = asset['-input-'] + '.js'
     target_json = requests.get(target).json()
-    print('https://charasheet.vampire-blood.net' in target)
     if 'https://charasheet.vampire-blood.net' in target and target_json['game'] == 'yukoya':
-        convert = ykch_converter(asset['-input-']).cocoforia()
-        st.markdown('```'+str(convert).replace("'", '"')+'```')
-        st.write(str(convert).replace("'", '"'))
+        convert = ykch_converter(asset['-input-']).cocoforia(True)
+        st.write(
+            '表示された変換データの右上に表示されているコピーボタンを押してデータをコピーして\nココフォリアに張り付けてください')
+        st.code(json.dumps(convert), 'json')
+        for ii in convert['data']:
+            st.write(f'{ii} : {convert['data'][ii]}')
+
+# テキストファイル保存ボタン
+if save_button and len(asset['-input-']) > 0:
+    target = asset['-input-'] + '.js'
+    target_json = requests.get(target).json()
+    convert = {}
+    if 'https://charasheet.vampire-blood.net' in target and target_json['game'] == 'yukoya':
+        convert = ykch_converter(asset['-input-']).cocoforia(True)
+    text_data = json.dumps(convert, indent=4)
+
+    # テキストデータをバイト形式に変換
+    text_bytes = text_data.encode('utf-8')
+    filename = ''
+    print(convert)
+    if len(convert["data"]["name"]) > 0:
+        filename = convert["data"]["name"]
+    else:
+        filename = 'ななしのへんげ.txt'
+    # ダウンロードボタンを作成
+    st.download_button(
+        label="テキストファイルをダウンロード",
+        data=text_bytes,
+        file_name=filename,
+        mime="text/plain"
+    )
